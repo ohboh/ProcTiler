@@ -1,5 +1,5 @@
 # ProcTiler
-A tile-based procedural map generator with customizable spawn probability made in Unity.  
+A tile-based procedural map generator with a customizable weighted probability system made in Unity.  
   
 I was making a simple procedural generator for my mobile game project from scratch, when I thought that it would be better to make it modular and upload it as its own repo. :>  
 
