@@ -1,13 +1,14 @@
-using System.Collections;
+// This code uses a third-party Tags package from neon-age. (https://github.com/neon-age/Tags)
 using System.Collections.Generic;
 using System.Linq;
 using UnityEngine;
 
 public class ProceduralGeneration : MonoBehaviour
 {
-    [SerializeField] private GameObject player;
+    [SerializeField] private Transform playerTransform;
+    [SerializeField] private float generationRadius;
     [SerializeField] private float tileSize;
-    
+
     [SerializeField] private GameObject[] forwardTiles;
     [SerializeField] private int[] forwardProbability;
     private GameObject[] forwardTilesWithProbability;
@@ -24,15 +25,19 @@ public class ProceduralGeneration : MonoBehaviour
     [SerializeField] private int[] rightProbability;
     private GameObject[] rightTilesWithProbability;
 
-
-    private List<GameObject> lastRendered = new List<GameObject>();
-    private List<GameObject> toRender = new List<GameObject>();
-    private bool generated = false;
+    [SerializeField] private GameObject allDirection;
 
     [SerializeField] private Tag toForward;
     [SerializeField] private Tag toBack;
     [SerializeField] private Tag toLeft;
     [SerializeField] private Tag toRight;
+
+    [SerializeField] private Tag Wall;
+
+    private List<GameObject> lastRendered = new List<GameObject>();
+    private List<GameObject> toRender = new List<GameObject>();
+
+    private ObjectPool objectPool;
 
     #region Editor stuff
     private void OnValidate()
@@ -49,84 +54,151 @@ public class ProceduralGeneration : MonoBehaviour
         {
             probabilities = new int[tiles.Length];
         }
-
-        ProbabilityAdder(tiles, probabilities, ref tilesWithProbability);
     }
-
     #endregion
     
+    private void Awake() {
+        ProbabilityAdder(forwardTiles, forwardProbability, ref forwardTilesWithProbability);
+        ProbabilityAdder(backTiles, backProbability, ref backTilesWithProbability);
+        ProbabilityAdder(leftTiles, leftProbability, ref leftTilesWithProbability);
+        ProbabilityAdder(rightTiles, rightProbability, ref rightTilesWithProbability);
+    }
     
-    void Start()
+    private void Start()
     {
+        objectPool = gameObject.AddComponent<ObjectPool>();
         lastRendered.Add(Instantiate(forwardTiles[0], Vector3.zero, Quaternion.identity));
     }
 
-    void Update()
+    private void Update()
     {
-        if (generated == false)
-        {
-            StartCoroutine(Generate());
-            generated = true;
-        }
+        Generate();
     }
 
-    IEnumerator Generate()
+    private void Generate()
     {
-        yield return new WaitForSeconds(0.5f);
+        Vector3 playerPosition = playerTransform.position;
+        DestroyTiles();
+
+        List<GameObject> newTiles = new List<GameObject>();
         for (int i = 0; i < lastRendered.Count; i++)
         {
-            if (lastRendered[i].HasTag(toForward))
+            GameObject tile = lastRendered[i];
+            Vector3 tilePosition = tile.transform.position;
+
+            if (tile.HasTag(toForward))
             {
-                Vector3 newPosition = lastRendered[i].transform.position + new Vector3(0, 0, tileSize);
-                if (!IsOccupied(newPosition))
+                Vector3 newPosition = tilePosition + new Vector3(0, 0, tileSize);
+                if (!IsOccupied(newPosition) && Vector3.Distance(newPosition, playerPosition) <= generationRadius)
                 {
-                    toRender.Add(Instantiate(forwardTilesWithProbability[Random.Range(0, forwardTilesWithProbability.Length)], newPosition, Quaternion.identity));
+                    GameObject newTile;
+            
+                    if (tile.HasOnlyTag(toForward))
+                    {
+                        newTile = objectPool.GetObject(forwardTilesWithProbability[Random.Range(0, forwardTilesWithProbability.Length)], newPosition, Quaternion.identity);
+                    }
+                    else
+                    {
+                        newTile = objectPool.GetObject(forwardTiles[0], newPosition, Quaternion.identity);
+                    }
+                    newTiles.Add(newTile);
                 }
             }
-            if (lastRendered[i].HasTag(toBack))
+
+            if (tile.HasTag(toBack))
             {
-                Vector3 newPosition = lastRendered[i].transform.position + new Vector3(0, 0, -tileSize);
-                if (!IsOccupied(newPosition))
+                Vector3 newPosition = tilePosition + new Vector3(0, 0, -tileSize);
+                if (!IsOccupied(newPosition) && Vector3.Distance(newPosition, playerPosition) <= generationRadius)
                 {
-                    toRender.Add(Instantiate(backTilesWithProbability[Random.Range(0, backTilesWithProbability.Length)], newPosition, Quaternion.identity));
+                    GameObject newTile;
+
+                    if (tile.HasOnlyTag(toBack))
+                    {
+                        newTile = objectPool.GetObject(backTilesWithProbability[Random.Range(0, backTilesWithProbability.Length)], newPosition, Quaternion.identity);
+                    }
+                    else
+                    {
+                        newTile = objectPool.GetObject(backTiles[0], newPosition, Quaternion.identity);
+                    }
+                    newTiles.Add(newTile);
                 }
             }
-            if (lastRendered[i].HasTag(toLeft))
+
+            if (tile.HasTag(toLeft))
             {
-                Vector3 newPosition = lastRendered[i].transform.position + new Vector3(-tileSize, 0, 0);
-                if (!IsOccupied(newPosition))
+                Vector3 newPosition = tilePosition + new Vector3(-tileSize, 0, 0);
+                if (!IsOccupied(newPosition) && Vector3.Distance(newPosition, playerPosition) <= generationRadius)
                 {
-                    toRender.Add(Instantiate(leftTilesWithProbability[Random.Range(0, leftTilesWithProbability.Length)], newPosition, Quaternion.identity));
+                    GameObject newTile;
+
+                    if (tile.HasOnlyTag(toLeft))
+                    {
+                        newTile = objectPool.GetObject(leftTilesWithProbability[Random.Range(0, leftTilesWithProbability.Length)], newPosition, Quaternion.identity);
+                    }
+                    else
+                    {
+                        newTile = objectPool.GetObject(leftTiles[0], newPosition, Quaternion.identity);
+                    }
+                    newTiles.Add(newTile);
                 }
             }
-            if (lastRendered[i].HasTag(toRight))
+
+            if (tile.HasTag(toRight))
             {
-                Vector3 newPosition = lastRendered[i].transform.position + new Vector3(tileSize, 0, 0);
-                if (!IsOccupied(newPosition))
+                Vector3 newPosition = tilePosition + new Vector3(tileSize, 0, 0);
+                if (!IsOccupied(newPosition) && Vector3.Distance(newPosition, playerPosition) <= generationRadius)
                 {
-                    toRender.Add(Instantiate(rightTilesWithProbability[Random.Range(0, rightTilesWithProbability.Length)], newPosition, Quaternion.identity));
+                    GameObject newTile;
+
+                    if (tile.HasOnlyTag(toRight))
+                    {
+                        newTile = objectPool.GetObject(rightTilesWithProbability[Random.Range(0, rightTilesWithProbability.Length)], newPosition, Quaternion.identity);
+                    }
+                    
+                    else
+                    {
+                        newTile = objectPool.GetObject(rightTiles[0], newPosition, Quaternion.identity);
+                    }
+                    newTiles.Add(newTile);
                 }
             }
         }
-        lastRendered.Clear();
-        lastRendered.AddRange(toRender);
-        toRender.Clear();
-        generated = false;
+
+        lastRendered.AddRange(newTiles);
+        
+    }
+
+    private void DestroyTiles()
+    {
+        List<GameObject> tilesToDestroy = new List<GameObject>();
+        Vector3 playerPosition = playerTransform.position;
+
+        for (int i = 0; i < lastRendered.Count; i++)
+        {
+            GameObject tile = lastRendered[i];
+
+            float distanceToPlayer = Vector3.Distance(tile.transform.position, playerPosition);
+            if (distanceToPlayer > generationRadius)
+            {
+                tilesToDestroy.Add(tile);
+            }
+        }
+
+        for (int i = 0; i < tilesToDestroy.Count; i++)
+        {
+            GameObject tile = tilesToDestroy[i];
+            lastRendered.Remove(tile);
+            objectPool.ReturnObject(tile);
+        }
     }
 
     bool IsOccupied(Vector3 position)
     {
-        Collider[] colliders = Physics.OverlapBox(position, new Vector3(tileSize /3, tileSize /3, tileSize /3));
+        Collider[] colliders = Physics.OverlapBox(position, new Vector3(tileSize /3, tileSize /3, tileSize /3));   
         return colliders.Length > 0;
     }
-    // just tryna see how big the overlap box is.
-    private void OnDrawGizmos()
-    {
-        Gizmos.color = Color.yellow;
-        Gizmos.DrawWireCube(transform.position, new Vector3(tileSize / 3, tileSize / 3, tileSize / 3));
-    }
 
-    void ProbabilityAdder(GameObject[] tiles, int[] probabilities, ref GameObject[] result)
+    private void ProbabilityAdder(GameObject[] tiles, int[] probabilities, ref GameObject[] result)
     {
         result = new GameObject[probabilities.Sum()];
         int index = 0;
@@ -139,3 +211,4 @@ public class ProceduralGeneration : MonoBehaviour
         }
     }
 }
+
